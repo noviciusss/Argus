@@ -3,7 +3,7 @@ import json
 from datetime import datetime,timezone
 from pathlib import Path
 
-DB_PATH = Path('data/research.db')
+DB_PATH = Path(__file__).parent.parent.parent / "data" / "research.db"
 DB_PATH.parent.mkdir(exist_ok=True) # create data/  if it doesn't exist
 
 _CREATE_JOBS_TABLE = """

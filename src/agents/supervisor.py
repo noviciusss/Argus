@@ -49,5 +49,5 @@ def supervisor_node(state:ReasearchState)->Command:
     if next_agent not in AGENTS:
         next_agent = "writer" #safe fallback
     
-    goto = "__end__" if next_agent == "FINISH" else next_agent
+    goto = "__end__" if next_agent == "finish" else next_agent
     return Command(goto=goto , update={"next_agent": next_agent})

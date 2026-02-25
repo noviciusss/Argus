@@ -2,7 +2,7 @@ from langgraph.graph import StateGraph,START
 from src.graph.state import ReasearchState
 from src.agents.supervisor import supervisor_node
 from src.agents.planner import planner_node 
-from src.agents.researcher import researcher_node
+from src.agents.researcher import research_node
 from src.agents.critic import critic_node
 from src.agents.writer import writer_node
 from src.persistence.checkpointer import get_checkpointer
@@ -13,7 +13,7 @@ def build_graph():
     #all nodes 
     builder.add_node("supervisor", supervisor_node)
     builder.add_node("planner", planner_node)
-    builder.add_node("researcher", researcher_node)
+    builder.add_node("researcher", research_node)
     builder.add_node("critic", critic_node)
     builder.add_node("writer", writer_node)
     
@@ -26,7 +26,7 @@ def build_graph():
     builder.add_edge("writer", "supervisor")
     
     checkpointer = get_checkpointer()
-    return builder.compile(checkpointer=checkpointer)
+    return builder.compile() ## checkpointer add karna hai
 
 # ── Smoke test ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
