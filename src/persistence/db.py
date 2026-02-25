@@ -38,7 +38,7 @@ def create_job(job_id:str,query:str,depth:str)->None:
         )
         conn.commit()
         
-def updated_job_status(
+def update_job_status(
     job_id:str,
     status:str,
     result :dict |None = None,

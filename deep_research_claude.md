@@ -67,7 +67,7 @@ Orchestration is the harder, more senior skill.
 | Phase | What                                            | Status   |
 | ----- | ------------------------------------------      | ------   |
 | 0     | Architecture design + this file                 | ✅Done  |
-| 1     | ResearchState + supervisor graph skeleton       | ⏳      |
+| 1     | ResearchState + supervisor graph skeleton       | ✅Done  |
 | 2     | All 4 agents implemented (reuse tools)          | ⏳      |
 | 3     | FastAPI layer — async jobs endpoints            | ⏳      |
 | 4     | LangSmith tracing + evaluation                  | ⏳      |
