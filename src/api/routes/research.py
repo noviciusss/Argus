@@ -6,6 +6,10 @@ from fastapi import APIRouter,BackgroundTasks,HTTPException
 from src.api.models import ReasearchRequest,ReasearchJobResponse,JobStatusResponse,JobResultResponse
 from src.persistence.db import create_job,update_job_status,get_job
 from src.graph.pipeline import build_graph
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 
 #build graph once at module load -not per request 
 router = APIRouter()
@@ -50,6 +54,7 @@ def _run_research(job_id:str,query:str,depth:str)->None:
         update_job_status(job_id,"failed",result={"error": str(e)})
 
 @router.post("/research",response_model=ReasearchJobResponse,status_code=202)
+@limiter.limit("5/hour")   # max 5 research jobs per IP per hour
 async def create_research_job(request:ReasearchRequest,background_tasks:BackgroundTasks):
         if request.depth not in ("quick","standard","deep"):
             raise HTTPException(status_code=422,detail="depth must be 'quick', 'standard', or 'deep'")
