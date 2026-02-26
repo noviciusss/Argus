@@ -107,6 +107,7 @@ Both layers live in `data/research.db`. Swapping to PostgreSQL is a one-line cha
 | Observability | LangSmith | Per-agent token counts, latency, tool traces |
 | Containerization | Docker + docker-compose | Reproducible builds, Render-ready |
 | Deployment | Render (free tier) | Live public URL |
+| Rate limiting | slowapi | Prevents free-tier quota abuse from public endpoint |
 | UI | Streamlit | Polls API, renders markdown report |
 | Config | python-dotenv | Standard 12-factor app config |
 
@@ -310,6 +311,31 @@ python -m streamlit run src/ui/streamlit_app.py
 
 ---
 
+## Rate Limiting
+
+The public `/research` endpoint is rate-limited using **slowapi** to prevent free-tier API quota abuse. Since the Render URL is publicly accessible, an unprotected endpoint could be hammered by anyone, burning through Groq and Tavily free-tier credits.
+
+**Current limits:**
+- `POST /research` — **5 requests per IP per hour**
+- `GET /jobs/*` — unlimited (read-only, no API cost)
+- `GET /health` — unlimited (required for UptimeRobot pings)
+
+If the limit is exceeded, the API returns:
+```json
+HTTP 429 Too Many Requests
+{ "error": "Rate limit exceeded: 5 per 1 hour" }
+```
+
+The limit is enforced per IP address. For local development and Docker, the limit is effectively not hit under normal use. To adjust limits, change the `@limiter.limit("5/hour")` decorator in `src/api/routes/research.py`.
+
+**Additional protection — hard caps on API dashboards:**
+- [Groq](https://console.groq.com) → Usage Limits → set monthly token cap
+- [Tavily](https://tavily.com) → Dashboard → set monthly search cap
+
+Even if the rate limiter is bypassed, the upstream API caps act as a second defense layer.
+
+---
+
 ## Design Decisions & Trade-offs
 
 <details>
@@ -384,7 +410,7 @@ Render's free tier spins containers down after 15 minutes of inactivity. The fir
 | PostgreSQL | Multi-user support, persistent jobs across deploys |
 | Server-Sent Events (SSE) | Real-time streaming of agent progress instead of polling |
 | PDF export | Download research reports as formatted PDFs |
-| Rate limiting middleware | `slowapi` — prevent free-tier quota abuse |
+| ~~Rate limiting middleware~~ | ✅ **Done** — `slowapi` implemented, 5 req/hour per IP on `POST /research` |
 | LLM-as-Judge evaluation | Score report quality using `DoCopilot` eval pattern |
 | Authentication | API key auth for the REST API |
 | Report caching | Same query within 24h returns cached result, no API cost |
