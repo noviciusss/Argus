@@ -20,9 +20,9 @@ Rules:
 """
 
 
-def planner_node(state: ReasearchState) -> dict: 
-    n_questions = _DEPTH_QUESTION.get(state.get("depth","standard"),3)
-    
+def planner_node(state: ReasearchState) -> dict:
+    n_questions = _DEPTH_QUESTION.get(state.get("depth", "standard"), 3)
+    print(f"[PLANNER] Generating {n_questions} sub-questions for: {state['query'][:60]}")  # ← add this
     llm = ChatGroq(
         model="llama-3.3-70b-versatile",
         api_key=os.getenv("GROQ_API_KEY"),
@@ -47,6 +47,7 @@ def planner_node(state: ReasearchState) -> dict:
     if not sub_questions:
         sub_questions = [state["query"]]
 
+    print(f"[PLANNER] Generated: {sub_questions}")  # ← and this before return
     return {
         "sub_questions": sub_questions,
         "messages": [AIMessage(content=f"Planner: generated {len(sub_questions)} sub-questions.")],

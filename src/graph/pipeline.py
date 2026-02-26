@@ -26,7 +26,7 @@ def build_graph():
     builder.add_edge("writer", "supervisor")
     
     checkpointer = get_checkpointer()
-    return builder.compile() ## checkpointer add karna hai
+    return builder.compile(checkpointer=checkpointer) ## checkpointer add karna hai
 
 # ── Smoke test ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":

@@ -68,10 +68,10 @@ Orchestration is the harder, more senior skill.
 | ----- | ------------------------------------------      | ------   |
 | 0     | Architecture design + this file                 | ✅Done  |
 | 1     | ResearchState + supervisor graph skeleton       | ✅Done  |
-| 2     | All 4 agents implemented (reuse tools)          | ⏳      |
-| 3     | FastAPI layer — async jobs endpoints            | ⏳      |
-| 4     | LangSmith tracing + evaluation                  | ⏳      |
-| 5     | Dockerfile + docker-compose working             | ⏳      |
+| 2     | All 4 agents implemented (reuse tools)          | ✅Done  |
+| 3     | FastAPI layer — async jobs endpoints            | ✅Done  |
+| 4     | LangSmith tracing + evaluation                  | ✅Done  |
+| 5     | Dockerfile + docker-compose working             | ✅Done  |
 | 6     | Render deployment — live URL                    | ⏳      |
 | 7     | README + architecture diagram + demo video      | ⏳      |
 

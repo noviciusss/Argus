@@ -1,5 +1,25 @@
-.env 
-.env-example.env
+# Secrets
+.env
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
+.pytest_cache/
+
+# Data (SQLite is ephemeral in containers — never commit it)
+data/research.db
+
+# Virtual envs
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
