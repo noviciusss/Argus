@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -40,3 +41,8 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(research_router)
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
