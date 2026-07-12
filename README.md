@@ -67,14 +67,16 @@ START
                                   │
                              researcher ──► [supervisor]
                                   │
-                               critic ──► [supervisor]
-                                  │
-                    (gaps found AND iterations < 3?)
-                         Yes ──► researcher (loop)
-                         No  ──► writer ──► [supervisor] ──► END
+                               critic ──► [hil_gate] (HIL interrupt check)
+                                            │
+                              (gaps found AND iterations < 3?)
+                                 Yes ──► [interrupt] ⚡ HIL pause
+                                           ├── Continue ──► researcher (loop)
+                                           └── Finalize ──► writer
+                                 No  ──► writer ──► [supervisor] ──► END
 ```
 
-The supervisor uses `Command(goto=...)` routing — the **LLM decides the flow** based on agent outputs, not hardcoded chains. `research_iterations >= 3` is enforced in code as a hard safety cap regardless of LLM decisions, preventing infinite loops on the Groq free tier.
+The supervisor uses `Command(goto=...)` routing — the **LLM decides the flow** based on agent outputs, not hardcoded chains. `research_iterations >= 3` is enforced in code as a hard safety cap regardless of LLM decisions, logging `auto_capped` and bypassing HIL routing directly to the writer.
 
 ### Two Persistence Layers
 
@@ -339,6 +341,13 @@ Even if the rate limiter is bypassed, the upstream API caps act as a second defe
 ## Design Decisions & Trade-offs
 
 <details>
+<summary><strong>Why did you put the HIL gate in its own node instead of inside the supervisor?</strong></summary>
+
+LangGraph re-executes a node from the top when resuming after `interrupt()`. If the interrupt lived inside `supervisor_node` — after the LLM routing call — every human resume would re-run the LLM call, costing Groq API tokens and introducing a non-determinism risk (the LLM could route differently the second time). A dedicated `hil_node` with no expensive logic before the interrupt line means re-execution is free and deterministic. The interrupt point is also isolated: its only job is to read state, pause, and return a decision.
+
+</details>
+
+<details>
 <summary><strong>Why multi-agent instead of one big ReAct agent?</strong></summary>
 
 A single ReAct agent conflates planning, researching, critiquing, and writing — each has different failure modes and requires different prompting strategies. With one agent:
@@ -406,6 +415,7 @@ Render's free tier spins containers down after 15 minutes of inactivity. The fir
 
 | Improvement | Why |
 |-------------|-----|
+| ~~Human-in-the-Loop gate~~ | ✅ **Done** — Dynamic HIL interrupts at Critic loop-back, timeout fallback |
 | Redis + Celery | Proper async task queue — jobs survive server restarts |
 | PostgreSQL | Multi-user support, persistent jobs across deploys |
 | Server-Sent Events (SSE) | Real-time streaming of agent progress instead of polling |

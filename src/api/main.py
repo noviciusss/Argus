@@ -17,8 +17,38 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     # Runs once at startup - creates DB + jobs table if not exists
     _get_conn()
+    
+    # Recovery check: scan for orphaned "awaiting_human" jobs on startup
+    try:
+        from src.persistence.db import get_jobs_by_status, log_hil_decision
+        from src.api.routes.research import _schedule_hil_timeout, _resume_research
+        from datetime import datetime, timezone
+        import threading
+        
+        orphaned = get_jobs_by_status("awaiting_human")
+        for job in orphaned:
+            expires_at = job.get("hil_expires_at")
+            if expires_at:
+                try:
+                    exp_dt = datetime.fromisoformat(expires_at)
+                    if exp_dt < datetime.now(timezone.utc):
+                        # Already expired — auto-finalize immediately
+                        log_hil_decision(
+                            job_id=job["job_id"],
+                            iteration=job.get("agent_turns", 0),
+                            decision="auto_finalize",
+                            gaps=[]
+                        )
+                        threading.Thread(target=_resume_research, args=(job["job_id"], "finalize"), daemon=True).start()
+                    else:
+                        # Not yet expired — re-spawn the timeout thread
+                        _schedule_hil_timeout(job["job_id"], expires_at)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+        
     yield
-    # Runs at shutdown - nothing to clean up currently
 
 
 app = FastAPI(

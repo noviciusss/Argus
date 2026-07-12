@@ -2,7 +2,7 @@ import os
 from langchain_groq import ChatGroq
 from src.graph.state import ReasearchState        
 from langchain_core.messages import AIMessage,SystemMessage,HumanMessage
-
+from src.api.stream_manager import stream_manager
 
 _DEPTH_QUESTION = {"quick":2,"standard":3,"deep":5}
 _SYSTEM_PROMPT = """
@@ -21,6 +21,13 @@ Rules:
 
 
 def planner_node(state: ReasearchState) -> dict:
+    job_id = state.get("job_id")
+    if job_id:
+        stream_manager.publish(job_id,{
+            "type":"log",
+            "message":"Planner: Decomposing research query into subquestions..."
+        })
+    
     n_questions = _DEPTH_QUESTION.get(state.get("depth", "standard"), 3)
     print(f"[PLANNER] Generating {n_questions} sub-questions for: {state['query'][:60]}")  # ← add this
     llm = ChatGroq(
@@ -48,6 +55,12 @@ def planner_node(state: ReasearchState) -> dict:
         sub_questions = [state["query"]]
 
     print(f"[PLANNER] Generated: {sub_questions}")  # ← and this before return
+    if job_id:
+        stream_manager.publish(job_id,{
+            "type":"log",
+            "message":f"Planner: Created {len(sub_questions)} sub-questions."
+        })
+
     return {
         "sub_questions": sub_questions,
         "messages": [AIMessage(content=f"Planner: generated {len(sub_questions)} sub-questions.")],

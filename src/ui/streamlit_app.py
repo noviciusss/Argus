@@ -31,18 +31,23 @@ with st.sidebar:
     except Exception:
         st.error("API offline — run uvicorn first")
 
+# Initialize session state keys
+if "job_id" not in st.session_state:
+    st.session_state.job_id = None
+if "query" not in st.session_state:
+    st.session_state.query = ""
+
 # ── Main input ────────────────────────────────────────────────────────────────
-query = st.text_area(
-    "Research query",
-    placeholder="e.g. What are the latest breakthroughs in protein folding AI?",
-    height=100,
-)
-
-if st.button("🚀 Start Research", type="primary", disabled=not query.strip()):
-    with st.status("Running research pipeline...", expanded=True) as status_box:
-
-        # Step 1 — submit job
-        st.write("📤 Submitting job...")
+# Show query input only if no job is active
+if not st.session_state.job_id:
+    query = st.text_area(
+        "Research query",
+        value=st.session_state.query,
+        placeholder="e.g. What are the latest breakthroughs in protein folding AI?",
+        height=100,
+    )
+    
+    if st.button("🚀 Start Research", type="primary", disabled=not query.strip()):
         try:
             resp = requests.post(
                 f"{API_BASE}/research",
@@ -50,89 +55,113 @@ if st.button("🚀 Start Research", type="primary", disabled=not query.strip()):
                 timeout=10,
             )
             resp.raise_for_status()
+            job = resp.json()
+            st.session_state.job_id = job["job_id"]
+            st.session_state.query = query.strip()
+            st.rerun()
         except Exception as e:
             st.error(f"Failed to submit job: {e}")
-            st.stop()
 
-        job = resp.json()
-        job_id = job["job_id"]
-        st.write(f"✅ Job created: `{job_id}`")
-        st.write(f"⏱ Estimated time: ~{job['estimated_seconds']}s")
-
-        # Step 2 — poll status
-        st.write("⏳ Waiting for research to complete...")
-        agent_labels = {
-            "planner": "📋 Planner — breaking down query",
-            "researcher": "🔍 Researcher — searching web, papers, Wikipedia",
-            "critic": "🧐 Critic — reviewing gaps",
-            "writer": "✍️ Writer — synthesizing report",
-        }
-
-        elapsed = 0
-        poll_interval = 3
-        max_wait = 180   # 3 minutes hard timeout
-
-        while elapsed < max_wait:
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-
-            try:
-                status_resp = requests.get(
-                    f"{API_BASE}/jobs/{job_id}/status", timeout=5
-                ).json()
-            except Exception:
-                continue
-
-            current_status = status_resp.get("status", "unknown")
-
-            if current_status == "running":
-                st.write(f"🔄 Running... ({elapsed}s elapsed)")
-            elif current_status == "complete":
-                status_box.update(label="✅ Research complete!", state="complete")
-                break
-            elif current_status == "failed":
-                status_box.update(label="❌ Research failed", state="error")
-                st.error("Job failed. Check API logs.")
-                st.stop()
-        else:
-            st.error("Timeout — research took too long. Try 'quick' depth.")
-            st.stop()
-
-    # Step 3 — fetch and display result
+else:
+    # A job is active! Show its status and progress.
+    job_id = st.session_state.job_id
+    st.info(f"Active Job ID: `{job_id}`")
+    
+    # Check status
     try:
-        result_resp = requests.get(
-            f"{API_BASE}/jobs/{job_id}/result", timeout=10
-        ).json()
+        status_resp = requests.get(f"{API_BASE}/jobs/{job_id}/status", timeout=5).json()
+        current_status = status_resp.get("status", "unknown")
     except Exception as e:
-        st.error(f"Failed to fetch result: {e}")
+        st.error(f"Error fetching status: {e}")
+        if st.button("🔄 Reset / Start New"):
+            st.session_state.job_id = None
+            st.rerun()
         st.stop()
-
-    # ── Report display ────────────────────────────────────────────────────────
-    st.divider()
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Status", result_resp.get("status", "?").upper())
-    col2.metric("Research iterations", result_resp.get("agent_turns", "?"))
-    col3.metric("Sources found", len(result_resp.get("sources") or []))
-
-    st.subheader("📄 Research Report")
-    report = result_resp.get("report", "")
-    if report:
-        st.markdown(report)
-    else:
-        st.warning("No report content returned.")
-
-    # ── Sources ───────────────────────────────────────────────────────────────
-    sources = result_resp.get("sources") or []
-    if sources:
-        with st.expander(f"🔗 Sources ({len(sources)})"):
-            for i, url in enumerate(sources, 1):
-                st.markdown(f"{i}. {url}")
-
-    # ── Download ──────────────────────────────────────────────────────────────
-    if report:
-        st.download_button(
-            label="⬇️ Download report as Markdown",
-            data=report,
-            file_name=f"research_{job_id[:8]}.md",
-            mime="text/markdown",
-        )
+        
+    if current_status in ("pending", "running"):
+        st.status(f"Running research pipeline... Status: {current_status}", state="running")
+        # auto rerun after a short sleep to simulate polling
+        time.sleep(2)
+        st.rerun()
+        
+    elif current_status == "awaiting_human":
+        st.warning("⚡ Human-in-the-Loop: Review Required")
+        hil = status_resp.get("hil_payload", {}) or {}
+        st.markdown(f"**Iteration {hil.get('iteration', '?')}/{hil.get('max_iterations', '?')} — Critic found research gaps:**")
+        for gap in hil.get("gaps", []):
+            st.markdown(f"• {gap}")
+            
+        expires_at = hil.get("expires_at")
+        if expires_at:
+            st.caption(f"⏱ Auto-finalizes at {expires_at} (UTC) if no response")
+            
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("🔍 Continue Researching", type="primary"):
+                try:
+                    resp = requests.post(f"{API_BASE}/jobs/{job_id}/decision", json={"decision": "continue"}, timeout=5)
+                    resp.raise_for_status()
+                    st.success("Routing back to Researcher...")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to send decision: {e}")
+        with col_b:
+            if st.button("✍️ Finalize Now"):
+                try:
+                    resp = requests.post(f"{API_BASE}/jobs/{job_id}/decision", json={"decision": "finalize"}, timeout=5)
+                    resp.raise_for_status()
+                    st.success("Skipping to Writer...")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to send decision: {e}")
+                    
+    elif current_status == "failed":
+        st.error("❌ Research job failed.")
+        if st.button("🔄 Reset / Start New"):
+            st.session_state.job_id = None
+            st.rerun()
+            
+    elif current_status == "complete":
+        st.success("✅ Research complete!")
+        
+        # Fetch results
+        try:
+            result_resp = requests.get(f"{API_BASE}/jobs/{job_id}/result", timeout=10).json()
+        except Exception as e:
+            st.error(f"Failed to fetch result: {e}")
+            st.stop()
+            
+        # Display metrics
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Status", result_resp.get("status", "?").upper())
+        col2.metric("Research iterations", result_resp.get("agent_turns", "?"))
+        col3.metric("Sources found", len(result_resp.get("sources") or []))
+        
+        st.subheader("📄 Research Report")
+        report = result_resp.get("report", "")
+        if report:
+            st.markdown(report)
+        else:
+            st.warning("No report content returned.")
+            
+        sources = result_resp.get("sources") or []
+        if sources:
+            with st.expander(f"🔗 Sources ({len(sources)})"):
+                for i, url in enumerate(sources, 1):
+                    st.markdown(f"{i}. {url}")
+                    
+        col_down, col_reset = st.columns([3, 1])
+        if report:
+            with col_down:
+                st.download_button(
+                    label="⬇️ Download report as Markdown",
+                    data=report,
+                    file_name=f"research_{job_id[:8]}.md",
+                    mime="text/markdown",
+                )
+        with col_reset:
+            if st.button("🔄 Start New Research"):
+                st.session_state.job_id = None
+                st.rerun()

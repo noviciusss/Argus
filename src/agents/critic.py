@@ -2,6 +2,7 @@ import os
 from langchain_groq import ChatGroq
 from src.graph.state import ReasearchState
 from langchain_core.messages import AIMessage,SystemMessage,HumanMessage
+from src.api.stream_manager import stream_manager 
 
 _SYSTEM_PROMPT = """You are a critical research reviewer. Your job is to identify GAPS in research provided.
 
@@ -21,6 +22,12 @@ NO_GAPS
 """
 
 def critic_node(state:ReasearchState)->dict:
+    job_id =state.get("job_id")
+    if job_id:
+        stream_manager.publish(job_id,{
+            "type":"log",
+            "message":"Critic: Reviewing findings and identifying gaps..."
+        })
     llm = ChatGroq(
         model="llama-3.3-70b-versatile",
         api_key=os.getenv("GROQ_API_KEY"),
@@ -54,6 +61,12 @@ def critic_node(state:ReasearchState)->dict:
             if line.strip() and line.strip()[0] in ("•", "-", "*")
         ]
         msg = f"Critic: identified {len(gaps)} gap(s) — routing back to researcher."
+
+    if job_id:
+        stream_manager.publish(job_id,{
+            "type":"log",
+            "message": msg
+        })
 
     return {
         "gaps_identified": gaps,

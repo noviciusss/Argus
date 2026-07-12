@@ -21,6 +21,19 @@ class JobStatusResponse(BaseModel):
     status: str   #pending, running, completed, failed
     created_at: str
     updated_at: str
+
+class HILPayload(BaseModel):
+    gaps: List[str]
+    iteration: int
+    max_iterations: int
+    expires_at: str
+
+class HILStatusResponse(JobStatusResponse):
+    """Extended JobStatusResponse containing the HIL payload when awaiting_human"""
+    hil_payload: Optional[HILPayload] = None
+
+class HILDecisionRequest(BaseModel):
+    decision: str  # "continue" | "finalize"
     
 class JobResultResponse(BaseModel):
     """Returned from GET /jobs/{job_id}/result """

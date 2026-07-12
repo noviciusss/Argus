@@ -2,6 +2,7 @@ import os
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from src.graph.state import ReasearchState
+from src.api.stream_manager import stream_manager
 
 _SYSTEM_PROMPT = """You are an expert research report writer. Synthesize the provided research findings into a 
 comprehensive, well-structured markdown report.
@@ -36,6 +37,12 @@ Rules:
 
 
 def writer_node(state: ReasearchState) -> dict:
+    job_id = state.get("job_id")
+    if job_id:
+        stream_manager.publish(job_id,{
+            "type":"log",
+            "message":"Writer: Generating final report..."
+        })
     llm = ChatGroq(
         model="llama-3.3-70b-versatile",
         api_key=os.getenv("GROQ_API_KEY"),
@@ -62,6 +69,12 @@ Write the complete research report now."""
         SystemMessage(content=_SYSTEM_PROMPT),
         HumanMessage(content=synthesis_prompt),
     ])
+
+    if job_id:
+        stream_manager.publish(job_id,{
+            "type":"log",
+            "message":"Writer: final report complete."
+        })
 
     return {
         "final_report": response.content,

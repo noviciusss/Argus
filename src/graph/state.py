@@ -1,4 +1,5 @@
 from typing import Annotated,TypedDict 
+# pyrefly: ignore [missing-import]
 from langgraph.graph.message import add_messages
 
 class ReasearchState(TypedDict):
@@ -20,3 +21,7 @@ class ReasearchState(TypedDict):
     
     #routing 
     next_agent: str #superviser sets this each turn 
+    
+    # HIL tracking
+    job_id: str
+    hil_decision: str # "continue" | "finalize" | "auto_finalize" | "auto_capped"
