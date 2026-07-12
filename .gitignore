@@ -7,8 +7,8 @@ __pycache__/
 *.pyo
 .pytest_cache/
 
-# Data (SQLite is ephemeral in containers — never commit it)
-data/research.db
+# Data (SQLite databases, journal files, and other storage)
+data/
 
 # Virtual envs
 venv/

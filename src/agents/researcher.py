@@ -4,6 +4,7 @@ from src.tools.wikipedia_tool import wikipedia_search
 from src.tools.tavily_tool import tavily_search
 from src.graph.state import ReasearchState
 from langchain_core.messages import AIMessage
+from src.api.stream_manager import stream_manager
 
 _DEPTH_TOOLS ={
     "quick": {"tavily": 3 ,"arxiv":False, "wikipedia":False},
@@ -12,6 +13,7 @@ _DEPTH_TOOLS ={
 }
 
 def research_node(state:ReasearchState)->dict:
+    job_id = state.get("job_id")
     depth = state.get("depth","standard")
     tool_config = _DEPTH_TOOLS[depth]
     iteration = state.get("research_iterations",0) 
@@ -26,6 +28,12 @@ def research_node(state:ReasearchState)->dict:
         current_query = gaps[0] 
     else:
         current_query = state["query"] #fallback to original query if no sub-questions or gaps left
+        
+    if job_id:
+        stream_manager.publish(job_id, {
+            "type": "log",
+            "message": f"Researcher: starting search iteration {iteration+1} for query: '{current_query[:60]}'"
+        })
         
     findings = []
     sources = list(state.get("sources",[]))
@@ -55,6 +63,11 @@ def research_node(state:ReasearchState)->dict:
         if wiki_result.get("url"):
             sources.append(wiki_result["url"])
             
+    if job_id:
+        stream_manager.publish(job_id, {
+            "type": "log",
+            "message": f"Researcher: completed iteration {iteration+1} with {len(findings)} findings."
+        })
             
     return{
         "research_findings": state.get("research_findings",[])+findings,

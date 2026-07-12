@@ -2,8 +2,22 @@ import time
 import requests 
 import streamlit as st
 import os
+import threading
 
-API_BASE = os.getenv("API_BASE", "http://localhost:8000")
+API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000")
+
+def reset_job_state():
+    st.session_state.job_id = None
+    st.session_state.logs = []
+    st.session_state.thread_active = [False]
+    st.session_state.stream_thread = None
+
+@st.cache_data(ttl=60)
+def check_health(api_base: str):
+    try:
+        return requests.get(f"{api_base}/health", timeout=2).json()
+    except Exception:
+        return None
 
 st.set_page_config(
     page_title="Argus — Deep Research Engine",
@@ -25,10 +39,10 @@ with st.sidebar:
     )
     st.divider()
     st.markdown(f"**API:** `{API_BASE}`")
-    try:
-        health = requests.get(f"{API_BASE}/health", timeout=2).json()
+    health = check_health(API_BASE)
+    if health:
         st.success(f"API online — v{health.get('version', '?')}")
-    except Exception:
+    else:
         st.error("API offline — run uvicorn first")
 
 # Initialize session state keys
@@ -36,6 +50,12 @@ if "job_id" not in st.session_state:
     st.session_state.job_id = None
 if "query" not in st.session_state:
     st.session_state.query = ""
+if "logs" not in st.session_state:
+    st.session_state.logs = []
+if "thread_active" not in st.session_state:
+    st.session_state.thread_active = [False]
+if "stream_thread" not in st.session_state:
+    st.session_state.stream_thread = None
 
 # ── Main input ────────────────────────────────────────────────────────────────
 # Show query input only if no job is active
@@ -74,14 +94,58 @@ else:
     except Exception as e:
         st.error(f"Error fetching status: {e}")
         if st.button("🔄 Reset / Start New"):
-            st.session_state.job_id = None
+            reset_job_state()
             st.rerun()
         st.stop()
         
     if current_status in ("pending", "running"):
-        st.status(f"Running research pipeline... Status: {current_status}", state="running")
-        # auto rerun after a short sleep to simulate polling
-        time.sleep(2)
+        st.subheader("📡 Real-time Research Logs")
+        
+        # Start background stream collector if not active
+        if not st.session_state.thread_active[0]:
+            st.session_state.logs = []
+            st.session_state.thread_active = [True]
+            
+            def log_collector(jid, logs_list, active_flag):
+                try:
+                    import json
+                    url = f"{API_BASE}/jobs/{jid}/stream"
+                    with requests.get(url, stream=True, timeout=30) as r:
+                        for line in r.iter_lines():
+                            if not active_flag[0]:
+                                break
+                            if line:
+                                decoded = line.decode("utf-8").strip()
+                                if decoded.startswith("data:"):
+                                    payload_str = decoded[5:].strip()
+                                    if payload_str:
+                                        try:
+                                            payload = json.loads(payload_str)
+                                            if payload.get("type") == "log":
+                                                logs_list.append(payload.get("message"))
+                                        except Exception:
+                                            pass
+                except Exception:
+                    pass
+                finally:
+                    active_flag[0] = False
+            
+            t = threading.Thread(
+                target=log_collector, 
+                args=(job_id, st.session_state.logs, st.session_state.thread_active),
+                daemon=True
+            )
+            t.start()
+            st.session_state.stream_thread = t
+
+        # Render the accumulated logs
+        if st.session_state.logs:
+            terminal_text = "\n".join(st.session_state.logs)
+            st.code(terminal_text, language="text")
+        else:
+            st.info("Waiting for logs from research worker...")
+            
+        time.sleep(1)
         st.rerun()
         
     elif current_status == "awaiting_human":
@@ -120,7 +184,7 @@ else:
     elif current_status == "failed":
         st.error("❌ Research job failed.")
         if st.button("🔄 Reset / Start New"):
-            st.session_state.job_id = None
+            reset_job_state()
             st.rerun()
             
     elif current_status == "complete":
@@ -163,5 +227,5 @@ else:
                 )
         with col_reset:
             if st.button("🔄 Start New Research"):
-                st.session_state.job_id = None
+                reset_job_state()
                 st.rerun()

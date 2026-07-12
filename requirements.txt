@@ -13,3 +13,7 @@ langsmith
 streamlit
 requests
 slowapi
+sse-starlette
+celery
+redis
+psycopg2-binary
