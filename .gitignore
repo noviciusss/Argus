@@ -23,3 +23,7 @@ env/
 *.egg-info/
 dist/
 build/
+
+# Local planning & notes (not for repo)
+deep_research_claude.md
+project-upgrade-plan.md
