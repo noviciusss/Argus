@@ -4,7 +4,7 @@ import streamlit as st
 import os
 import threading
 
-API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000")
+API_BASE = os.getenv("API_BASE", "https://argus-h0uw.onrender.com/")
 
 def reset_job_state():
     st.session_state.job_id = None
